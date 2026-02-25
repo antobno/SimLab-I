@@ -1,0 +1,164 @@
+% !TEX program = lualatex
+\documentclass[margin=0.3cm]{standalone}
+\usepackage{luacode}
+
+\usepackage[x11names]{xcolor}
+
+% Colores
+\definecolor{cw0}{RGB}{0,175,239}
+\definecolor{cw1}{RGB}{216,244,254}
+\definecolor{cw2}{RGB}{177,234,254}
+\definecolor{cw3}{RGB}{242,251,255}
+\definecolor{cw4}{RGB}{197,199,208}
+\definecolor{cw5}{RGB}{204,245,252}
+
+% PAQUETES PARA LA TABLA 
+
+\usepackage{makecell} % Para crear celdas locales
+\usepackage{nicematrix} % Para crear tablas bonitas
+\usepackage{bm} % Para negritas en entorno matematico
+
+% Generador con un x0
+\begin{luacode*}
+-- Función que genera la secuencia y la tabla
+function generador(a, c, m, x0)
+    local x = x0
+    local secuencia = {x} -- lista de x_j
+    local cocientes = {} -- lista de cocientes (parte entera de (a*x+c)/m)
+    local paso_extra = false
+    local periodo
+
+    -- Iteramos hasta encontrar la repetición de x0
+    while true do
+        local valor = a * x + c
+        local coc = math.floor(valor / m)
+        local nuevo_x = valor - coc * m
+        table.insert(cocientes, coc)
+        if nuevo_x == x0 then
+            -- Cerramos el ciclo: añadimos x0 (que ya es nuevo_x) y calculamos un paso más
+            table.insert(secuencia, nuevo_x) -- x_k = x0
+            -- Siguiente paso (x_{k+1}) para mostrar la repetición de la primera fila
+            local valor_extra = a * nuevo_x + c
+            local coc_extra = math.floor(valor_extra / m)
+            local nuevo_x_extra = valor_extra - coc_extra * m
+            table.insert(cocientes, coc_extra)
+            table.insert(secuencia, nuevo_x_extra)  -- x_{k+1} = x1
+            periodo = #cocientes - 1
+            break
+        else
+            table.insert(secuencia, nuevo_x)
+            x = nuevo_x
+        end
+    end
+
+    -- Construimos la tabla en LaTeX
+    tex.print("\\begin{NiceTabular}[hvlines,cell-space-limits=6pt,rules={color=cw4,width=1pt}]{cccc}")
+    tex.print("\\CodeBefore")
+    tex.print("\\rowcolor{cw0}{1}")
+    tex.print("\\rowcolors{2}{white}{cw2}")
+    tex.print("\\Body")
+    tex.print("\\RowStyle[color=white]{\\bfseries}")
+    tex.print("$\\bm{j}$ & $\\bm{x_j}$ & $\\displaystyle\\bm{\\frac{"..a.."x_j+"..c.."}{"..m.."}}$ & $\\bm{x_{j+1}}$ \\\\")
+
+    for j = 0, #cocientes - 1 do
+        local x_j = secuencia[j+1]
+        local coc = cocientes[j+1]
+        local x_j1 = secuencia[j+2]
+        tex.print(j .. " & " .. x_j .. " & " .. coc .. " & " .. x_j1 .. " \\\\")
+    end
+    tex.print("\\Block{1-4}{El ciclo de vida es: " .. periodo .. "}")
+    tex.print("\\end{NiceTabular}")
+end
+\end{luacode*}
+
+\newcommand{\generador}[4]{%
+  \directlua{generador(#1,#2,#3,#4)}%
+}
+
+
+% Generador con un x0 y x1
+\begin{luacode*}
+function generadorr(a, c, m, x0, x1)
+    local x = {}
+    x[0] = x0
+    x[1] = x1
+    local cocientes = {}
+    -- Guardamos pares (x_j, x_{j+1}) con su índice j
+    local pares = {}
+    pares[x0 .. "," .. x1] = 0   -- par inicial (j=0)
+    local j = 1
+    local ciclo_inicio, periodo
+
+    while true do
+        local x_prev = x[j-1]
+        local x_curr = x[j]
+        local valor = a * x_curr + c * x_prev
+        local coc = math.floor(valor / m)
+        local nuevo_x = valor - coc * m
+        table.insert(cocientes, coc)   -- cociente para la fila j (que va de x_j a x_{j+1})
+        x[j+1] = nuevo_x
+        local par = x_curr .. "," .. nuevo_x   -- (x_j, x_{j+1})
+
+        if pares[par] then
+            ciclo_inicio = pares[par]
+            periodo = j - ciclo_inicio
+            break
+        else
+            pares[par] = j
+            j = j + 1
+        end
+    end
+
+    -- Mostramos desde j=0 hasta j (inclusive)
+    local ultimo_j = j
+
+    tex.print("\\begin{NiceTabular}[hvlines,cell-space-limits=6pt,rules={color=cw4,width=1pt}]{cccc}")
+    tex.print("\\CodeBefore")
+    tex.print("\\rowcolor{cw0}{1}")
+    tex.print("\\rowcolors{2}{white}{cw2}")
+    tex.print("\\Body")
+    tex.print("\\RowStyle[color=white]{\\bfseries}")
+    tex.print("$\\bm{j}$ & $\\bm{x_j}$ & $\\displaystyle\\bm{\\frac{"..a.."x_j+"..c.."x_{j-1}}{"..m.."}}$ & $\\bm{x_{j+1}}$ \\\\")
+
+    for j_idx = 0, ultimo_j do
+        local x_j = x[j_idx]
+        local x_j1 = x[j_idx+1]
+        local coc_str
+        if j_idx == 0 then
+            coc_str = "--"   -- primera fila no tiene x_{-1}
+        else
+            coc_str = tostring(cocientes[j_idx])
+        end
+        tex.print(j_idx .. " & " .. x_j .. " & " .. coc_str .. " & " .. x_j1 .. " \\\\")
+    end
+
+    tex.print("\\Block{1-4}{El ciclo de vida es: " .. periodo .. "}")
+    tex.print("\\end{NiceTabular}")
+end
+\end{luacode*}
+
+\newcommand{\generadorr}[5]{%
+  \directlua{generador(#1,#2,#3,#4,#5)}%
+}
+
+\begin{document}
+\pagestyle{empty}
+
+
+% Generadores con un x0 y x1
+
+%\generador{21}{15}{31}{21}
+
+%\generador{13}{9}{128}{7}
+
+%\generador{17}{0}{31}{23}
+
+%\generador{121}{1}{256}{17}
+
+
+
+% Generador con un x0 y x1
+
+\generadorr{21}{15}{64}{21}{43}
+
+\end{document}
